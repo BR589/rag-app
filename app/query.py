@@ -6,7 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# Lazy load - model loads on first request, not on startup
+_model = None
+def get_model():
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
+
 client = chromadb.PersistentClient(path="./chroma_db")
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
