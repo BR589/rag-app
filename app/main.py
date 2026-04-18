@@ -2,8 +2,8 @@ import os
 import shutil
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from ingest import ingest_document
-from query import ask_llm
+from app.ingest import ingest_document
+from app.query import ask_llm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
