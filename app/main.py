@@ -9,11 +9,11 @@ from fastapi.responses import FileResponse
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/chat")
 def chat_ui():
-    return FileResponse("static/index.html")
+    return FileResponse("app/static/index.html")
 
 # Allow frontend to talk to this API
 app.add_middleware(
