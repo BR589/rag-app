@@ -3,10 +3,14 @@ import pypdf
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-# Load the embedding model (downloads once, then cached)
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# Lazy load
+_model = None
+def get_model():
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
-# Setup ChromaDB (stores data locally in a folder called chroma_db)
 client = chromadb.PersistentClient(path="./chroma_db")
 
 
@@ -44,7 +48,7 @@ def ingest_document(file_path: str, tenant_id: str):
     chunks = chunk_text(text)
 
     # Step 3: Generate embeddings
-    embeddings = model.encode(chunks).tolist()
+    embeddings = get_model().encode(chunks).tolist()
 
     # Step 4: Store in ChromaDB under tenant's collection
     collection = get_collection(tenant_id)
