@@ -7,6 +7,7 @@ from app.ingest import ingest_document
 from app.query import ask_llm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from app.query import ask_llm, get_collection, groq_client
 
 app = FastAPI()
 
@@ -86,6 +87,54 @@ async def ask_question(
         "citations": result["citations"],
         "chunks_found": result["chunks_found"]
     }
+@app.post("/summarize")
+async def summarize_documents(tenant_id: str = Form(...)):
+    """Auto summarize all uploaded documents for a tenant"""
+    try:
+        collection = get_collection(tenant_id)
+        results = collection.get(include=["documents", "metadatas"])
+
+        if not results["documents"]:
+            return {"summary": "No documents found. Please upload documents first."}
+
+        # Group by filename
+        files = {}
+        for i, doc in enumerate(results["documents"]):
+            metadata = results["metadatas"][i] or {}
+            filename = metadata.get("filename", "unknown")
+            if filename not in files:
+                files[filename] = []
+            files[filename].append(doc)
+
+        # Build summary prompt
+        all_content = ""
+        for filename, chunks in files.items():
+            sample = " ".join(chunks[:5])  # First 5 chunks per file
+            all_content += f"\n\nDocument: {filename}\n{sample}"
+
+        prompt = f"""Summarize the following documents in a structured way.
+For each document provide:
+- Document name
+- Main topic (1 sentence)
+- Key points (3-5 bullet points)
+- Important terms or concepts mentioned
+
+Documents:
+{all_content}
+
+Provide a clear, concise summary:"""
+
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1024
+        )
+
+        return {"summary": response.choices[0].message.content}
+
+    except Exception as e:
+        return {"summary": f"Error generating summary: {str(e)}"}
 
 
 @app.post("/clear-history")

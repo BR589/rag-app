@@ -376,6 +376,20 @@
     .empty-state p { font-size: 13px; text-align: center; max-width: 300px; }
 
     #fileInput { display: none; }
+.copy-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  display: block;
+}
+.copy-btn:hover { background: #f1f5f9; color: #6366f1; }
+
+#fileInput { display: none; }
   </style>
 </head>
 <body>
@@ -401,6 +415,7 @@
     <div id="selectedFiles" class="selected-files"></div>
     <button class="upload-btn" id="uploadBtn" onclick="uploadFiles()">Upload & Train</button>
     <div class="upload-status" id="uploadStatus"></div>
+    <button class="upload-btn" style="margin-top:8px; background:#0f172a; border:1px solid #334155;" onclick="summarizeDocs()">📋 Summarize All Docs</button>
   </div>
 
   <div class="file-list">
@@ -567,7 +582,12 @@
 
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
-    bubble.textContent = text;
+    bubble.innerHTML = text
+  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  .replace(/\*(.*?)\*/g, '<em>$1</em>')
+  .replace(/^### (.*?)$/gm, '<h4 style="margin:8px 0 4px;font-size:13px;color:#0f172a;">$1</h4>')
+  .replace(/^- (.*?)$/gm, '<li style="margin-left:16px;margin-bottom:2px;">$1</li>')
+  .replace(/\n/g, '<br>');
 
     if (citations && citations.length > 0) {
       const citDiv = document.createElement("div");
@@ -576,6 +596,18 @@
         `<span class="citation-tag">📄 ${c.filename} — Page ${c.page}</span>`
       ).join("");
       bubble.appendChild(citDiv);
+    }
+
+   if (type === "bot") {
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "copy-btn";
+      copyBtn.textContent = "📋 Copy";
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(text);
+        copyBtn.textContent = "✅ Copied!";
+        setTimeout(() => copyBtn.textContent = "📋 Copy", 2000);
+      };
+      bubble.appendChild(copyBtn);
     }
 
     row.appendChild(avatar);
@@ -643,6 +675,33 @@
   window.onload = loadExistingFiles;
 
   document.getElementById("tenantId").addEventListener("change", loadExistingFiles);
+
+async function summarizeDocs() {
+    const tenantId = document.getElementById("tenantId").value.trim();
+    
+    if (uploadedFiles.length === 0) {
+        addMessage("Please upload documents first before summarizing.", "bot");
+        return;
+    }
+
+    addMessage("📋 Summarize all uploaded documents", "user");
+    addTyping();
+
+    const formData = new FormData();
+    formData.append("tenant_id", tenantId);
+
+    try {
+        const res = await fetch(`${API}/summarize`, { method: "POST", body: formData });
+        const data = await res.json();
+        removeTyping();
+        addMessage(data.summary, "bot");
+        const emptyState = document.querySelector(".empty-state");
+        if (emptyState) emptyState.remove();
+    } catch(e) {
+        removeTyping();
+        addMessage("Failed to generate summary. Please try again.", "bot");
+    }
+}
 </script>
 
 </body>
