@@ -95,17 +95,27 @@
     const data = await res.json();
 
     document.querySelector(".typing-msg")?.remove();
-    addMessage(data.answer, "bot");
+addMessage(data.answer, "bot", data.citations);
   }
 
-  function addMessage(text, type) {
+  function addMessage(text, type, citations = []) {
     const messages = document.getElementById("messages");
     const div = document.createElement("div");
     div.className = `message ${type}`;
     div.textContent = text;
+
+    // Add citations if available
+    if (citations && citations.length > 0) {
+        const citDiv = document.createElement("div");
+        citDiv.style.cssText = "margin-top:8px; font-size:11px; color:#888; border-top:1px solid #eee; padding-top:6px;";
+        citDiv.innerHTML = "📄 Sources: " + citations.map(c =>
+    `<span style='margin-right:8px; background:#f0f0f0; padding:2px 6px; border-radius:4px;'>${c.filename} — Page ${c.page}</span>`
+).join(" &nbsp;");
+    }
+
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
-  }
+}
 </script>
 
 </body>

@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,13 +10,6 @@ from fastapi.responses import FileResponse
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-@app.get("/chat")
-def chat_ui():
-    return FileResponse("app/static/index.html")
-
-# Allow frontend to talk to this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,8 +17,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+@app.get("/chat")
+def chat_ui():
+    return FileResponse("app/static/index.html")
+
 UPLOAD_DIR = "./uploads"
+HISTORY_FILE = "./conversation_history.json"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_history(history):
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f)
 
 
 @app.get("/")
@@ -37,16 +50,11 @@ async def upload_document(
     tenant_id: str = Form(...),
     file: UploadFile = File(...)
 ):
-    """Upload and ingest a PDF document for a tenant"""
-
-    # Save file temporarily
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(file_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # Ingest into ChromaDB
     result = ingest_document(file_path, tenant_id)
-
     return {"tenant_id": tenant_id, "file": file.filename, **result}
 
 
@@ -55,14 +63,34 @@ async def ask_question(
     tenant_id: str = Form(...),
     question: str = Form(...)
 ):
-    """Ask a question against a tenant's documents"""
+    all_history = load_history()
+    history = all_history.get(tenant_id, [])
 
-    # Get answer from Ollama
-    result = ask_llm(question, tenant_id)
+    result = ask_llm(question, tenant_id, history)
+
+    if tenant_id not in all_history:
+        all_history[tenant_id] = []
+
+    all_history[tenant_id].append({
+        "user": question,
+        "assistant": result["answer"]
+    })
+
+    all_history[tenant_id] = all_history[tenant_id][-10:]
+    save_history(all_history)
 
     return {
         "tenant_id": tenant_id,
         "question": question,
         "answer": result["answer"],
+        "citations": result["citations"],
         "chunks_found": result["chunks_found"]
     }
+
+
+@app.post("/clear-history")
+async def clear_history(tenant_id: str = Form(...)):
+    all_history = load_history()
+    all_history[tenant_id] = []
+    save_history(all_history)
+    return {"status": "cleared"}
