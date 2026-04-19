@@ -15,7 +15,6 @@
       overflow: hidden;
     }
 
-    /* SIDEBAR */
     .sidebar {
       width: 280px;
       background: #0f172a;
@@ -88,6 +87,28 @@
     .upload-area p { font-size: 12px; color: #64748b; margin-top: 6px; }
     .upload-area span { font-size: 24px; }
 
+    .selected-files {
+      margin-bottom: 8px;
+    }
+
+    .selected-file-item {
+      font-size: 11px;
+      background: #1e293b;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .selected-count {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
     .upload-btn {
       width: 100%;
       padding: 10px;
@@ -114,7 +135,6 @@
 
     .upload-status.error { color: #ef4444; }
 
-    /* FILE LIST */
     .file-list {
       flex: 1;
       overflow-y: auto;
@@ -167,7 +187,6 @@
 
     .file-delete:hover { color: #ef4444; background: #0f172a; }
 
-    /* MAIN CHAT */
     .main {
       flex: 1;
       display: flex;
@@ -305,7 +324,6 @@
       30% { transform: translateY(-6px); }
     }
 
-    /* INPUT */
     .input-area {
       padding: 16px 24px;
       background: white;
@@ -380,6 +398,7 @@
       <p>Click to select PDFs<br/>Multiple files supported</p>
     </div>
     <input type="file" id="fileInput" accept=".pdf" multiple />
+    <div id="selectedFiles" class="selected-files"></div>
     <button class="upload-btn" id="uploadBtn" onclick="uploadFiles()">Upload & Train</button>
     <div class="upload-status" id="uploadStatus"></div>
   </div>
@@ -417,6 +436,24 @@
 <script>
   const API = window.location.origin;
   let uploadedFiles = [];
+
+  // Show selected files preview before uploading
+  document.getElementById("fileInput").addEventListener("change", function() {
+    const files = this.files;
+    const selectedDiv = document.getElementById("selectedFiles");
+
+    if (files.length === 0) {
+      selectedDiv.innerHTML = "";
+      return;
+    }
+
+    selectedDiv.innerHTML = `
+      <div class="selected-count">${files.length} file(s) selected:</div>
+      ${Array.from(files).map(f => `
+        <div class="selected-file-item">📄 ${f.name}</div>
+      `).join("")}
+    `;
+  });
 
   async function uploadFiles() {
     const tenantId = document.getElementById("tenantId").value.trim();
@@ -458,8 +495,8 @@
     status.textContent = `✅ ${successCount} file(s) ready`;
     updateDocCount();
     fileInput.value = "";
+    document.getElementById("selectedFiles").innerHTML = "";
 
-    // Clear empty state
     const emptyState = document.querySelector(".empty-state");
     if (emptyState) emptyState.remove();
   }
@@ -584,6 +621,28 @@
         <p>Ask a new question to continue</p>
       </div>`;
   }
+
+  async function loadExistingFiles() {
+    const tenantId = document.getElementById("tenantId").value.trim();
+    try {
+      const res = await fetch(`${API}/files/${tenantId}`);
+      const data = await res.json();
+      if (data.files.length > 0) {
+        uploadedFiles = data.files.map(f => ({
+          name: f.filename,
+          chunks: 0,
+          pages: f.pages
+        }));
+        updateFileList();
+        updateDocCount();
+        document.querySelector(".empty-state")?.remove();
+      }
+    } catch(e) {}
+  }
+
+  window.onload = loadExistingFiles;
+
+  document.getElementById("tenantId").addEventListener("change", loadExistingFiles);
 </script>
 
 </body>
