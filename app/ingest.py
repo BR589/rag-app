@@ -1,26 +1,19 @@
 import os
 import pypdf
 import chromadb
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
-# Lazy load
-_model = None
-def get_model():
-    global _model
-    if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model
+# Lightweight embedding model (~50MB vs 500MB before)
+embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
 
-client = chromadb.PersistentClient(path="./chroma_db")
+client = chromadb.PersistentClient(path="/tmp/chroma_db")
 
 
 def get_collection(tenant_id: str):
-    """Each tenant gets their own isolated collection"""
     return client.get_or_create_collection(name=f"tenant_{tenant_id}")
 
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50):
-    """Split text into overlapping chunks"""
     words = text.split()
     chunks = []
     i = 0
@@ -32,9 +25,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50):
 
 
 def ingest_document(file_path: str, tenant_id: str):
-    """Parse PDF, chunk it, embed it, store in ChromaDB"""
-
-    # Step 1: Extract text from PDF
+    # Extract text
     text = ""
     with open(file_path, "rb") as f:
         reader = pypdf.PdfReader(f)
@@ -44,13 +35,14 @@ def ingest_document(file_path: str, tenant_id: str):
     if not text.strip():
         return {"error": "Could not extract text from PDF"}
 
-    # Step 2: Chunk the text
+    # Chunk
     chunks = chunk_text(text)
 
-    # Step 3: Generate embeddings
-    embeddings = get_model().encode(chunks).tolist()
+    # Embed using fastembed
+    embeddings = list(embedding_model.embed(chunks))
+    embeddings = [e.tolist() for e in embeddings]
 
-    # Step 4: Store in ChromaDB under tenant's collection
+    # Store
     collection = get_collection(tenant_id)
     collection.add(
         documents=chunks,

@@ -1,20 +1,15 @@
-from sentence_transformers import SentenceTransformer
 import chromadb
+from fastembed import TextEmbedding
 from groq import Groq
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Lazy load - model loads on first request, not on startup
-_model = None
-def get_model():
-    global _model
-    if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model
+# Same lightweight model as ingest.py
+embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
 
-client = chromadb.PersistentClient(path="./chroma_db")
+client = chromadb.PersistentClient(path="/tmp/chroma_db")
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
@@ -23,10 +18,10 @@ def get_collection(tenant_id: str):
 
 
 def retrieve_chunks(question: str, tenant_id: str, top_k: int = 5):
-    """Find the most relevant chunks for a question"""
+    # Embed the question
+    question_embedding = list(embedding_model.embed([question]))[0].tolist()
 
-    question_embedding = model.encode([question]).tolist()[0]
-
+    # Search ChromaDB
     collection = get_collection(tenant_id)
     results = collection.query(
         query_embeddings=[question_embedding],
@@ -38,10 +33,7 @@ def retrieve_chunks(question: str, tenant_id: str, top_k: int = 5):
 
 
 def build_prompt(question: str, chunks: list):
-    """Build the prompt to send to the LLM"""
-
     context = "\n\n".join(chunks)
-
     prompt = f"""You are a helpful assistant. Answer the question based ONLY on the context below.
 If the answer is not in the context, say "I don't have enough information to answer this."
 
@@ -51,13 +43,10 @@ Context:
 Question: {question}
 
 Answer:"""
-
     return prompt
 
 
 def ask_llm(question: str, tenant_id: str):
-    """Retrieve chunks and get a real answer from Groq"""
-
     chunks = retrieve_chunks(question, tenant_id)
     prompt = build_prompt(question, chunks)
 
